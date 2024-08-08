@@ -1,0 +1,71 @@
+from machine import UART
+import time
+import ujson
+
+
+URL = "http://doc.itprojects.cn"
+PORT = 80
+
+
+def config_4G():
+    """对4G模块进行配置，然后保存生效"""
+    
+    # 0. 检测是否已经配置过，如果配置过相同的信息，则不会再次配置
+    try:
+        with open("./4G-config.txt", "r") as f:
+            config_str = f.read()
+            config_dict = ujson.loads(config_str)
+            url = config_dict.get("url")
+            port = config_dict.get("port")
+            if url and port and url == URL and port == PORT:
+                print("4G模块之前已经配置，本次操作无需配置")
+                return
+    except Exception as ret:
+        pass
+
+    # 1. 配置链接HTTP服务器，注意修改ip、port
+    uart.write("config,set,http,1,ttluart,0,%s,%d,/,30,0,0,0,0,0\r\n" % (URL, PORT))
+    time.sleep(0.5)
+    print("配置ht：", uart.read())  # 从4G设备读取数据
+
+    # 2. 保存配置
+    uart.write("config,set,save\r\n")
+    print("已配置 >>>", uart.read())
+    
+    with open("./4G-config.txt", "w") as f:
+        config_str = ujson.dumps({
+            "url": URL,
+            "port": PORT
+        })
+        f.write(config_str)
+
+    # 3. 等0.5分钟
+    for i in range(30, 0, -1):
+       print("4G模块重启中 等待%d秒..." % i)
+       time.sleep(1)
+
+    print("重启完成...")
+    
+
+def http_get_param(param):
+    """向服务器发送get请求，注意请求的参数在URL中拼接"""
+    uart.write(param)  # 最终发送的请求URL  http://doc.itprojects.cn:80/hello.txt?a=100
+    print("已发送 >>> %s:%d/%s" % (URL, PORT, param))
+    time.sleep(1)
+    
+    recv_data = uart.read()
+    print("已收到 >>>", recv_data)
+    while recv_data:
+        recv_data = uart.read()
+        if recv_data:
+            print("已收到 >>>", recv_data)
+
+
+
+if __name__ == "__main__":
+    uart = UART(2, 115200)
+    uart.write("config,get,imei\r\n")  # 向4G设备发送数据
+    time.sleep(0.5)
+    print("4G模块的id：", uart.read())  # 从4G设备读取数据
+    config_4G()
+    http_get_param("hello.txt?a=200")
